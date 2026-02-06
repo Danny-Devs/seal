@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use sui_sdk_types::Address;
 use sui_types::collection_types::VecSet;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct VecMap<K, V>(pub sui_types::collection_types::VecMap<K, V>);
 
 #[derive(Deserialize, Debug)]
@@ -251,3 +251,38 @@ move_bytes_deserializer!(deserialize_move_bytes, Vec<u8>);
 move_bytes_deserializer!(deserialize_enc_pk, PublicKey<G1Element>);
 move_bytes_deserializer!(deserialize_signing_pk, BLS12381PublicKey);
 move_bytes_deserializer!(deserialize_partial_pk, G2Element);
+
+// ===== Upgrade Manager Types =====
+
+/// Vote type for upgrade proposals.
+#[derive(Deserialize, Debug, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum UpgradeVote {
+    Approve,
+    Reject,
+}
+
+/// Package digest newtype (32 bytes).
+#[derive(Deserialize, Debug, Clone)]
+pub struct PackageDigest(pub Vec<u8>);
+
+/// Upgrade proposal.
+#[derive(Deserialize, Debug, Clone)]
+pub struct UpgradeProposal {
+    pub digest: PackageDigest,
+    pub version: u64,
+    pub votes: VecMap<Address, UpgradeVote>,
+}
+
+/// UpgradeManager object.
+#[derive(Deserialize, Debug)]
+pub struct UpgradeManager {
+    pub id: UidStruct,
+    // cap field is UpgradeCap - we don't need to parse it
+    pub upgrade_proposal: Option<UpgradeProposal>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct UidStruct {
+    pub id: Address,
+}

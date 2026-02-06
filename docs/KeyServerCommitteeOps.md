@@ -103,7 +103,14 @@ Run the publish-and-init command:
 cargo run --bin dkg-cli -- publish-and-init
 ```
 
-This script publishes the `seal_committee` package onchain and initializes the committee state. It also appends the committee identifiers to `dkg.yaml`, for example: 
+This command:
+
+- Publishes the `seal_committee` package onchain with upgrade capability
+- Extracts the InitCap and UpgradeCap from the publish transaction
+- Initializes the committee state and attaches the UpgradeManager (which holds the UpgradeCap) to the committee
+- Appends the committee identifiers to `dkg.yaml`
+
+For example: 
 
 ```yaml
 publish-and-init:
@@ -544,6 +551,105 @@ Once your key server is running successfully, back up the `MASTER_SHARE_VX+1` va
 
 ```bash
 rm -rf dkg-state
+```
+
+## Package Upgrade
+
+The committee can upgrade the `seal_committee` Move package through a voting process. A contract upgrade only happens if a threshold of committee members approves.
+
+The upgrade follows these steps:
+
+1. **Compute package digest**: Build the updated package and extract its digest
+2. **Committee voting**: Committee members vote for the upgrade
+3. **Authorize and execute upgrade**: Once threshold is reached, authorize and perform the upgrade in a single transaction
+
+### Prerequisites
+
+1. Make sure you are on the expected network.
+2. Make sure you are using the same address as the one you used that participates in the current active committee.
+3. `<KEY_SERVER_OBJ_ID>` can be found in your server's config file `key-server-config.yaml`.
+
+```bash
+sui client active-env
+sui client active-address
+
+# check current key server and its committee members
+cargo run --bin dkg-cli -- check-key-server-status \
+  --key-server-id <KEY_SERVER_OBJ_ID> \
+  --network <NETWORK>
+```
+
+### Steps
+
+#### 1. Compute the package digest
+
+Pull the updated package code locally and verify updates. This command computes the package digest. Make sure that all committee members have the same digest and are ready for upgrade.
+
+```bash
+# in seal/
+cargo run --bin dkg-cli -- package-digest \
+  --package-path move/committee \
+  --network <NETWORK>
+```
+
+This outputs:
+
+```
+Digest for package 'committee': 0xd0f13987e824f0f462911bc45d5a45004f4e3d752de2be939111274e862cc00c
+```
+
+#### 2. Vote for the upgrade
+
+Each committee member votes for the upgrade using the locally built package.
+
+```bash
+cargo run --bin dkg-cli -- vote \
+  --package-path move/committee \
+  --key-server-id <KEY_SERVER_OBJ_ID> \
+  --network <NETWORK>
+```
+
+**Optional flags**:
+- `--wallet <PATH>`: Use a custom wallet config file (default: `~/.sui/sui_config/client.yaml`)
+- `--active-address <ADDRESS>`: Override the active address from wallet config
+- `--gas-budget <AMOUNT>`: Set custom gas budget (default: 100000000 MIST = 0.1 SUI)
+
+To check the current upgrade proposal status (digest, votes, threshold), run:
+
+```bash
+cargo run --bin dkg-cli -- check-key-server-status \
+  --key-server-id <KEY_SERVER_OBJ_ID> \
+  --network <NETWORK>
+```
+
+This displays the active upgrade proposal with the current vote count and status.
+
+#### 3. Authorize and execute the upgrade
+
+Once the threshold number of committee members have voted, any member can authorize and execute the upgrade in a single transaction.
+
+This command:
+- Authorizes the upgrade (gets an UpgradeTicket).
+- Performs the package upgrade with the ticket (gets an UpgradeReceipt).
+- Commits the upgrade receipt.
+
+```bash
+cargo run --bin dkg-cli -- authorize-and-upgrade \
+  --package-path move/committee \
+  --key-server-id <KEY_SERVER_OBJ_ID> \
+  --network <NETWORK>
+```
+
+The upgrade is completed upon successful transaction.
+
+#### 4. Reset proposal (optional)
+
+If the threshold number of committee members reject the upgrade, any member can reset the proposal to allow a new upgrade proposal.
+
+```bash
+cargo run --bin dkg-cli -- reset-proposal \
+  --key-server-id <KEY_SERVER_OBJ_ID> \
+  --network <NETWORK>
 ```
 
 ## Quick reference: Fresh DKG vs Key rotation
